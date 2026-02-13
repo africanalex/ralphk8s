@@ -1,0 +1,5 @@
+# Values override files (keep example for reference)
+*-values.yaml
+!example-values.yaml
+
+.local/

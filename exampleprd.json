@@ -1,0 +1,79 @@
+{
+  "version": 1,
+  "prdId": "PRD-1",
+  "title": "Documentation refresh",
+  "phase": 1,
+  "repo": "my-repo",
+  "dependsOn": [],
+  "runName": "example-ralph-run",
+  "activeTaskId": null,
+  "nextTaskId": "TASK-001",
+  "tasks": [
+    {
+      "id": "TASK-001",
+      "category": "documentation",
+      "title": "Convert authentication docs to new framework",
+      "description": "As a developer, I need authentication documentation updated so I can implement login correctly. Update existing auth docs to use the new framework, including login flow, token handling, and configuration.",
+      "workBranch": "docs/convert-auth",
+      "relevantDocs": [
+        "docs/authentication.md",
+        "docs/security.md"
+      ],
+      "relevantSource": [],
+      "steps": [
+        "Review existing authentication documentation",
+        "Identify framework-specific differences",
+        "Rewrite examples using the new framework",
+        "Update configuration and environment variable references",
+        "Revise security best practices section"
+      ],
+      "passes": false,
+      "status": "queued",
+      "attempts": 0,
+      "lastUpdate": null,
+      "checkpoint": null
+    },
+    {
+      "id": "TASK-002",
+      "category": "documentation",
+      "title": "Update testing strategy documentation",
+      "description": "As a developer, I need testing docs updated to match the new testing stack.",
+      "workBranch": "docs/convert-testing",
+      "relevantDocs": [
+        "docs/testing.md"
+      ],
+      "relevantSource": [],
+      "steps": [
+        "Replace old test framework references",
+        "Update example test cases",
+        "Document new test lifecycle",
+        "Update CI pipeline examples"
+      ],
+      "passes": false,
+      "status": "queued",
+      "attempts": 0,
+      "lastUpdate": null,
+      "checkpoint": null
+    },
+    {
+      "id": "TASK-003",
+      "category": "documentation",
+      "title": "Revise API documentation",
+      "description": "As a developer, I need API docs updated to match the new API style.",
+      "workBranch": "docs/convert-api",
+      "relevantDocs": [],
+      "relevantSource": [],
+      "steps": [
+        "Replace old controller examples",
+        "Update request/response formats",
+        "Revise error-handling documentation",
+        "Update API overview diagrams"
+      ],
+      "passes": false,
+      "status": "queued",
+      "attempts": 0,
+      "lastUpdate": null,
+      "checkpoint": null
+    }
+  ]
+}

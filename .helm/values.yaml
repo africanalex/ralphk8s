@@ -1,0 +1,35 @@
+# Default values for ralph-job.
+
+image:
+  repository: docker.io/ralph/ralph-polyglot-base
+  tag: latest
+  pullPolicy: IfNotPresent
+
+# Feature Flags
+enableJob: true
+enableAuth: false
+enableCleanup: false
+
+# Global Configuration
+global:
+  sessionPvcName: "ralph-workspace"
+  sshSecretName: "github-ssh-key"
+
+# Default Job Settings (can be overridden)
+job:
+  name: "ralph-task"
+  aiProvider: "claude"  # Options: claude, gemini, chatgpt
+  expertise: "coding"
+  aiModel: "claude-sonnet-4-5-20250929"
+  aiTimeout: "1200"
+  maxIterations: 10
+  maxRateLimitRetries: "3"
+  fallbackSleepSeconds: "3600"
+  logRotationSizeMb: "10"
+  runtime: "python"      # Options: python, java, node
+  repoUrl: ""            # Leave empty, to be provided per repo
+  branch: "main"
+  project: "default"
+  gitUser:
+    name: "Ralph"
+    email: "ralph@automated.local"

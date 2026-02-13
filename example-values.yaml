@@ -1,0 +1,51 @@
+# Example values for the Ralph Loop Helm chart.
+# Copy and customize for your repo, then install with:
+#   helm install ralph .helm/ -f example-values.yaml -n ralph
+
+# --- Image (optional; chart has defaults) ---
+# image:
+#   repository: docker.io/your-org/ralph-polyglot-base
+#   tag: latest
+#   pullPolicy: IfNotPresent
+
+# --- Feature flags ---
+# enableJob: true
+# enableAuth: false
+# enableCleanup: false
+
+# --- Global (optional; chart has defaults) ---
+# global:
+#   sessionPvcName: "ralph-workspace"
+#   sshSecretName: "github-ssh-key"
+
+job:
+  name: "ralph-my-project"
+  repoUrl: "git@github.com:your-org/your-repo.git"
+  branch: "ralph-claude"
+  runtime: "node"   # python | java | node
+  aiProvider: "claude"   # claude | gemini | chatgpt
+  project: "my-project"
+  expertise: "Svelte, TypeScript, Tailwind"
+  aiModel: "claude-sonnet-4-5-20250929"
+  aiTimeout: "1200"
+  maxIterations: 10
+  prd: "my-feature"   # PRD or task identifier passed to the loop script
+
+  # Optional overrides (chart defaults shown)
+  # maxRateLimitRetries: "3"
+  # fallbackSleepSeconds: "3600"
+  # logRotationSizeMb: "10"
+
+  # Git author for commits (optional)
+  # gitUser:
+  #   name: "Ralph"
+  #   email: "ralph@automated.local"
+
+  # CPU/memory (optional; chart has defaults)
+  # resources:
+  #   requests:
+  #     memory: "2Gi"
+  #     cpu: "1"
+  #   limits:
+  #     memory: "4Gi"
+  #     cpu: "2"

@@ -1,0 +1,37 @@
+{{- if .Values.enableAuth -}}
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ .Values.job.name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: ralph-auth
+    project: {{ .Values.job.project | default .Values.job.name }}
+spec:
+  containers:
+  - name: auth
+    image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+    imagePullPolicy: {{ .Values.image.pullPolicy }}
+    command: ["sleep", "infinity"]
+    
+    securityContext:
+      runAsUser: 1000
+      runAsGroup: 1000
+
+    volumeMounts:
+    - name: workspace
+      mountPath: /work
+
+    resources:
+      requests:
+        memory: "512Mi"
+        cpu: "250m"
+      limits:
+        memory: "2Gi"
+        cpu: "1000m"
+
+  volumes:
+  - name: workspace
+    persistentVolumeClaim:
+      claimName: {{ .Values.global.sessionPvcName }}
+{{- end }}

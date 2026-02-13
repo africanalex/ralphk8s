@@ -1,0 +1,294 @@
+{{- if .Values.enableJob -}}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Values.job.name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    project: {{ .Values.job.project | default .Values.job.name }}
+    managed-by: ralph
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 7200
+  template:
+    metadata:
+      {{- $repoName := "" -}}
+      {{- if .Values.job.repoUrl -}}
+        {{- $repoName = .Values.job.repoUrl | splitList "/" | last | trimSuffix ".git" -}}
+      {{- else -}}
+        {{- $repoName = .Values.job.name -}}
+      {{- end }}
+      labels:
+        project: {{ .Values.job.project | default $repoName | default .Values.job.name }}
+        app: ralph
+    spec:
+      restartPolicy: Never
+
+      # Security context for the pod - fsGroup ensures volume is writable by group 1000
+      securityContext:
+        fsGroup: 1000
+
+      initContainers:
+      - name: git-clone
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        securityContext:
+          runAsUser: 1000
+          runAsGroup: 1000
+        command:
+          - bash
+          - -c
+          - |
+            set -e
+
+            # Setup SSH for GitHub
+            mkdir -p "$HOME/.ssh"
+            cp /ssh-secret/id_ed25519 "$HOME/.ssh/id_ed25519"
+            chmod 600 "$HOME/.ssh/id_ed25519"
+            ssh-keyscan -t ed25519 github.com >> "$HOME/.ssh/known_hosts" 2>/dev/null
+
+            cd /work
+            REPO_URL="{{ .Values.job.repoUrl }}"
+            REPO_NAME="{{ $repoName }}"
+
+            # Mark directory as safe (ownership may differ between runs)
+            git config --global --add safe.directory /work/$REPO_NAME
+
+            if [ -d "$REPO_NAME" ]; then
+              echo "Repository exists, verifying clean state..."
+              cd "$REPO_NAME"
+
+              # Ensure origin uses SSH (avoid HTTPS auth prompts)
+              git remote set-url origin "$REPO_URL"
+
+              # Check for uncommitted changes (staged or unstaged), excluding ralph-log.txt
+              if ! git diff --quiet -- ':!ralph-log.txt' || ! git diff --cached --quiet -- ':!ralph-log.txt'; then
+                echo "ERROR: Uncommitted changes detected!"
+                echo "Run the ralph-cleanup job to preserve changes before continuing."
+                git status --short
+                exit 1
+              fi
+
+              # Check for untracked files (excluding ralph-log.txt)
+              UNTRACKED=$(git ls-files --others --exclude-standard | grep -v 'ralph-log.txt' || true)
+              if [ -n "$UNTRACKED" ]; then
+                echo "ERROR: Untracked files detected!"
+                echo "Run the ralph-cleanup job to preserve changes before continuing."
+                echo "$UNTRACKED"
+                exit 1
+              fi
+
+              # Fetch and checkout ralph branch
+              git fetch origin
+
+              if ! git show-ref --verify --quiet "refs/remotes/origin/{{ .Values.job.branch }}"; then
+                echo "ERROR: No '{{ .Values.job.branch }}' branch on remote. Create it first."
+                exit 1
+              fi
+
+              git checkout {{ .Values.job.branch }} 2>/dev/null || git checkout -b {{ .Values.job.branch }} origin/{{ .Values.job.branch }}
+              git reset --hard origin/{{ .Values.job.branch }}
+              git clean -fd
+            else
+              echo "Cloning repository..."
+              git clone "$REPO_URL" "$REPO_NAME"
+              cd "$REPO_NAME"
+
+              git fetch origin
+              if ! git show-ref --verify --quiet "refs/remotes/origin/{{ .Values.job.branch }}"; then
+                echo "ERROR: No '{{ .Values.job.branch }}' branch on remote. Create it first."
+                exit 1
+              fi
+
+              git checkout {{ .Values.job.branch }} 2>/dev/null || git checkout -b {{ .Values.job.branch }} origin/{{ .Values.job.branch }}
+            fi
+
+            echo "Repository ready at /work/$REPO_NAME"
+
+        volumeMounts:
+        - name: workspace
+          mountPath: /work
+        - name: ssh-key
+          mountPath: /ssh-secret
+          readOnly: true
+
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+
+      containers:
+      - name: ralph
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+
+        # Run as non-root user ralph (UID 1000)
+        securityContext:
+          runAsUser: 1000
+          runAsGroup: 1000
+
+        command:
+          - bash
+          - -c
+          - |
+            # Setup SSH for git push (runs as user 1000)
+            mkdir -p "$HOME/.ssh"
+            cp /ssh-secret/id_ed25519 "$HOME/.ssh/id_ed25519"
+            chmod 600 "$HOME/.ssh/id_ed25519"
+            ssh-keyscan -t ed25519 github.com >> "$HOME/.ssh/known_hosts" 2>/dev/null
+            echo "[Ralph] SSH configured"
+
+            REPO_NAME="{{ $repoName }}"
+
+            # Git settings for Claude pushes/commits
+            git config --global --add safe.directory /work/$REPO_NAME
+            git config --global user.email "{{ .Values.job.gitUser.email | default "ralph@automated.local" }}"
+            git config --global user.name "{{ .Values.job.gitUser.name | default "Ralph" }}"
+
+            # Restore Claude auth from PVC if available
+            if [ -d /work/.claude-auth ]; then
+              rm -rf "$HOME/.claude"
+              cp -r /work/.claude-auth "$HOME/.claude"
+              echo "[Ralph] Restored .claude directory"
+            fi
+            if [ -f /work/.claude.json ]; then
+              cp /work/.claude.json "$HOME/.claude.json"
+              echo "[Ralph] Restored .claude.json"
+            fi
+            
+            # Restore Gemini auth from PVC if available
+            if [ -d /work/.gemini ]; then
+              rm -rf "$HOME/.gemini"
+              cp -r /work/.gemini "$HOME/.gemini"
+              echo "[Ralph] Restored .gemini directory"
+            fi
+
+            # Execute ralph with repo name as argument
+            SCRIPT_PATH="/app/scripts/ralph-${AI_PROVIDER}.sh"
+            
+            # DEBUG: Check what's available
+            echo "[Ralph] DEBUG: AI_PROVIDER='${AI_PROVIDER}'"
+            echo "[Ralph] DEBUG: SCRIPT_PATH='${SCRIPT_PATH}'"
+            echo "[Ralph] DEBUG: Contents of /app/scripts:"
+            ls -la /app/scripts/ 2>&1 || echo "[Ralph] DEBUG: /app/scripts does not exist or is not accessible"
+            echo "[Ralph] DEBUG: Checking for script:"
+            [ -f "$SCRIPT_PATH" ] && echo "[Ralph] DEBUG: ✓ Script found at $SCRIPT_PATH" || echo "[Ralph] DEBUG: ✗ Script NOT found at $SCRIPT_PATH"
+            
+            # Function to sync auth back to PVC on exit
+            sync_auth_exit() {
+              echo "[Ralph] Syncing auth credentials back to PVC..."
+              if [ -d "$HOME/.claude" ]; then
+                rm -rf /work/.claude-auth
+                cp -r "$HOME/.claude" /work/.claude-auth
+              fi
+              if [ -f "$HOME/.claude.json" ]; then
+                cp "$HOME/.claude.json" /work/.claude.json
+              fi
+              if [ -d "$HOME/.gemini" ]; then
+                rm -rf /work/.gemini
+                cp -r "$HOME/.gemini" /work/.gemini
+              fi
+              echo "[Ralph] Sync complete."
+            }
+            trap sync_auth_exit EXIT
+
+            if [ -f "$SCRIPT_PATH" ]; then
+              echo "[Ralph] Executing $SCRIPT_PATH..."
+              bash "$SCRIPT_PATH" "$REPO_NAME" {{ .Values.job.maxIterations | default 10 }}
+            else
+              echo "[Ralph] ERROR: Script $SCRIPT_PATH not found"
+              exit 1
+            fi
+
+        workingDir: /work/{{ $repoName }}
+
+        env:
+        - name: PRD
+          value: {{ .Values.job.prd | quote }}
+        - name: AI_TIMEOUT
+          value: {{ .Values.job.aiTimeout | quote }}
+        - name: AI_PROVIDER
+          value: {{ .Values.job.aiProvider | quote }}
+        - name: AI_MODEL
+          value: {{ .Values.job.aiModel | quote }}
+        - name: GEMINI_MODEL
+          value: {{ .Values.job.aiModel | quote }}
+        - name: LOG_ROTATION_SIZE_MB
+          value: {{ .Values.job.logRotationSizeMb | quote }}
+        - name: PYTHONDONTWRITEBYTECODE
+          value: "1"
+        - name: RALPH_PROMPT_FILE
+          value: "/etc/ralph/system-prompt.md"
+        - name: GRADLE_USER_HOME                                                      
+          value: "/work/.gradle-home"
+        - name: QUARKUS_DATASOURCE_DEVSERVICES_ENABLED
+          value: "false"
+        - name: QUARKUS_DATASOURCE_JDBC_URL
+          value: "jdbc:postgresql://localhost:5432/esg_test"
+        - name: QUARKUS_DATASOURCE_USERNAME
+          value: "test"
+        - name: QUARKUS_DATASOURCE_PASSWORD
+          value: "test"
+
+        resources:
+          {{- if .Values.job.resources }}
+          {{- toYaml .Values.job.resources | nindent 10 }}
+          {{- else }}
+          requests:
+            memory: "1Gi"
+            cpu: "1"
+          limits:
+            memory: "2Gi"
+            cpu: "2"
+          {{- end }}
+
+        volumeMounts:
+        - name: workspace
+          mountPath: /work
+        - name: ssh-key
+          mountPath: /ssh-secret
+          readOnly: true
+        - name: scripts
+          mountPath: /app/scripts
+          readOnly: true
+        - name: prompts
+          mountPath: /etc/ralph
+          readOnly: true
+
+      - name: postgres
+        image: postgres:15                                                        
+        env:                                                                      
+          - name: POSTGRES_DB                                                     
+            value: esg_test                                                       
+          - name: POSTGRES_USER                                                   
+            value: test                                                           
+          - name: POSTGRES_PASSWORD                                               
+            value: test                                                           
+        ports:                                                                    
+          - containerPort: 5432                                                   
+        readinessProbe:                                                           
+          exec:                                                                   
+            command: ["pg_isready", "-U", "test"]                                 
+          initialDelaySeconds: 5                                                  
+          periodSeconds: 2 
+
+      volumes:
+      - name: workspace
+        persistentVolumeClaim:
+          claimName: {{ .Values.global.sessionPvcName }}
+      - name: ssh-key
+        secret:
+          secretName: {{ .Values.global.sshSecretName }}
+          defaultMode: 0400
+      - name: scripts
+        configMap:
+          name: {{ .Values.job.name }}-scripts
+          defaultMode: 0755
+      - name: prompts
+        configMap:
+          name: {{ .Values.job.name }}-prompts
+          defaultMode: 0644
+{{- end }}

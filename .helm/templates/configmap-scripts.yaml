@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.job.name }}-scripts
+data:
+  # This ranges through the 'scripts/' folder and includes every .sh file
+{{- range $path, $_ := .Files.Glob "scripts/*.sh" }}
+  {{ base $path }}: |-
+{{ $.Files.Get $path | indent 4 }}
+{{- end }}

@@ -1,0 +1,156 @@
+{{- if .Values.enableCleanup -}}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Values.job.name }}-cleanup
+  namespace: {{ .Release.Namespace }}
+  labels:
+    project: {{ .Values.job.project | default .Values.job.name }}
+    managed-by: ralph
+    app: ralph-cleanup
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      {{- $repoName := "" -}}
+      {{- if .Values.job.repoUrl -}}
+        {{- $repoName = .Values.job.repoUrl | splitList "/" | last | trimSuffix ".git" -}}
+      {{- else -}}
+        {{- $repoName = .Values.job.name -}}
+      {{- end }}
+      labels:
+        project: {{ .Values.job.project | default $repoName | default .Values.job.name }}
+        app: ralph-cleanup
+    spec:
+      restartPolicy: Never
+
+      # Security context for the pod - fsGroup ensures volume is writable by group 1000
+      securityContext:
+        fsGroup: 1000
+
+      containers:
+      - name: cleanup
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        
+        securityContext:
+          runAsUser: 1000
+          runAsGroup: 1000
+
+        command:
+          - /bin/bash
+          - -c
+          - |
+            set -e
+            export HOME=/tmp
+            
+            REPO_DIR="/work/{{ $repoName }}"
+            INTEGRATION_BRANCH="{{ .Values.job.branch }}"
+
+            if [ ! -d "$REPO_DIR" ]; then
+              echo "No repository found at $REPO_DIR. Nothing to clean up."
+              exit 0
+            fi
+
+            # Setup SSH for GitHub
+            mkdir -p "$HOME/.ssh"
+            cp /ssh-secret/id_ed25519 "$HOME/.ssh/id_ed25519"
+            chmod 600 "$HOME/.ssh/id_ed25519"
+            
+            # Use GIT_SSH_COMMAND for more reliable SSH configuration
+            export GIT_SSH_COMMAND="ssh -i $HOME/.ssh/id_ed25519 -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
+
+            cd "$REPO_DIR"
+            git config --global --add safe.directory "$REPO_DIR"
+            git config --global user.email "{{ .Values.job.gitUser.email | default "ralph@automated.local" }}"
+            git config --global user.name "{{ .Values.job.gitUser.name | default "Ralph Cleanup" }}"
+
+            echo "=== Ralph Cleanup Job ==="
+            echo "Repository: $REPO_DIR"
+            echo "Integration Branch: $INTEGRATION_BRANCH"
+            echo ""
+
+            # Create rescue branch name with timestamp
+            TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+            RESCUE_BRANCH="ralph/rescue-$TIMESTAMP"
+
+            # Check current state
+            CURRENT_BRANCH=$(git branch --show-current 2>/dev/null || echo "detached")
+            echo "Current branch: $CURRENT_BRANCH"
+
+            # Fetch latest from remote
+            echo ""
+            echo "Fetching from origin..."
+            git fetch origin
+
+            if ! git show-ref --verify --quiet "refs/remotes/origin/$INTEGRATION_BRANCH"; then
+              echo "ERROR: No '$INTEGRATION_BRANCH' branch on remote."
+              exit 1
+            fi
+
+            # Discard ralph-log.txt changes (operational log, not important to preserve)
+            git checkout -- ralph-log.txt 2>/dev/null || true
+
+            # Check for uncommitted changes
+            UNTRACKED=$(git ls-files --others --exclude-standard | grep -v 'ralph-log.txt' || true)
+            
+            if ! git diff --quiet || ! git diff --cached --quiet || [ -n "$UNTRACKED" ]; then
+              echo ""
+              echo "Uncommitted changes detected."
+              echo "Creating rescue branch: $RESCUE_BRANCH"
+              
+              # Create branch from current state
+              git checkout -b "$RESCUE_BRANCH"
+
+              echo "Committing local changes..."
+              git add -A
+              git commit -m "Ralph rescue: uncommitted changes from $TIMESTAMP
+
+            Automatic rescue commit by ralph-cleanup job.
+            Original branch: $CURRENT_BRANCH
+            " || echo "Nothing to commit"
+
+              # Push rescue branch
+              echo "Pushing rescue branch to origin..."
+              git push -u origin "$RESCUE_BRANCH"
+              echo "Rescue branch pushed: $RESCUE_BRANCH"
+            else
+              echo "No uncommitted changes to save."
+            fi
+
+            # Reset to integration branch
+            echo ""
+            echo "Resetting to origin/$INTEGRATION_BRANCH..."
+            git checkout "$INTEGRATION_BRANCH" 2>/dev/null || git checkout -b "$INTEGRATION_BRANCH" "origin/$INTEGRATION_BRANCH"
+            git reset --hard "origin/$INTEGRATION_BRANCH"
+            git clean -fd
+
+            echo ""
+            echo "=== Cleanup Complete ==="
+            echo "Workspace reset to: origin/$INTEGRATION_BRANCH"
+
+        volumeMounts:
+        - name: workspace
+          mountPath: /work
+        - name: ssh-key
+          mountPath: /ssh-secret
+          readOnly: true
+
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+
+      volumes:
+      - name: workspace
+        persistentVolumeClaim:
+          claimName: {{ .Values.global.sessionPvcName }}
+      - name: ssh-key
+        secret:
+          secretName: {{ .Values.global.sshSecretName }}
+          defaultMode: 0400
+{{- end }}
