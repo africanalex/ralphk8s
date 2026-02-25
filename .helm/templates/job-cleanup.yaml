@@ -89,11 +89,8 @@ spec:
               exit 1
             fi
 
-            # Discard ralph-log.txt changes (operational log, not important to preserve)
-            git checkout -- ralph-log.txt 2>/dev/null || true
-
             # Check for uncommitted changes
-            UNTRACKED=$(git ls-files --others --exclude-standard | grep -v 'ralph-log.txt' || true)
+            UNTRACKED=$(git ls-files --others --exclude-standard || true)
             
             if ! git diff --quiet || ! git diff --cached --quiet || [ -n "$UNTRACKED" ]; then
               echo ""

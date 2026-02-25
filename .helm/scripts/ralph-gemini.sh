@@ -36,7 +36,9 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORK_DIR="${RALPH_WORK_DIR:-$(pwd)}"
 PRD_FILE="$WORK_DIR/prd/$PRD-prd.json"
-RALPH_LOG_FILE="$WORK_DIR/ralph-log.txt"
+RALPH_LOG_DIR="/work/logs/${RUN_NAME:-default}"
+mkdir -p "$RALPH_LOG_DIR"
+RALPH_LOG_FILE="$RALPH_LOG_DIR/ralph-log.txt"
 
 # Prompt file resolution:
 # 1. Check RALPH_PROMPT_FILE env var

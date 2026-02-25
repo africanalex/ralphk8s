@@ -8,6 +8,8 @@ metadata:
     app: ralph-auth
     project: {{ .Values.job.project | default .Values.job.name }}
 spec:
+  securityContext:
+    fsGroup: 1000
   containers:
   - name: auth
     image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"

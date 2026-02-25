@@ -1,9 +1,9 @@
 # Default values for ralph-job.
 
 image:
-  repository: docker.io/ralph/ralph-polyglot-base
+  repository: ralph-polyglot-base
   tag: latest
-  pullPolicy: IfNotPresent
+  pullPolicy: Never
 
 # Feature Flags
 enableJob: true

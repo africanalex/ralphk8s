@@ -18,13 +18,7 @@ Use the Task tool to delegate work to specialized sub-agents at these tiers:
 Launch a Haiku agent to read all `relevantDocs` and `relevantSource` files and produce a concise implementation brief. This keeps your context clean and focused.
 
 ### For Test Verification (Haiku)
-After implementation, launch a Haiku agent to run tests and report pass/fail with failure details. Only read the failure output yourself if fixes are needed. You are working in a Docker Container so you will not have access to dev services and test containers. You can use the postgres container running along side your container for testing with these details: 
-- name: POSTGRES_DB                                                     
-  value: esg_test                                                       
-- name: POSTGRES_USER                                                   
-  value: test                                                           
-- name: POSTGRES_PASSWORD                                               
-  value: test 
+After implementation, launch a Haiku agent to run tests and report pass/fail with failure details. Only read the failure output yourself if fixes are needed.
 
 ### For Implementation (Sonnet, if you are Opus)
 Delegate actual code writing to a Sonnet agent with the implementation brief, task steps, and Codebase Patterns from the progress file.

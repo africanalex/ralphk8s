@@ -61,16 +61,16 @@ spec:
               # Ensure origin uses SSH (avoid HTTPS auth prompts)
               git remote set-url origin "$REPO_URL"
 
-              # Check for uncommitted changes (staged or unstaged), excluding ralph-log.txt
-              if ! git diff --quiet -- ':!ralph-log.txt' || ! git diff --cached --quiet -- ':!ralph-log.txt'; then
+              # Check for uncommitted changes (staged or unstaged)
+              if ! git diff --quiet || ! git diff --cached --quiet; then
                 echo "ERROR: Uncommitted changes detected!"
                 echo "Run the ralph-cleanup job to preserve changes before continuing."
                 git status --short
                 exit 1
               fi
 
-              # Check for untracked files (excluding ralph-log.txt)
-              UNTRACKED=$(git ls-files --others --exclude-standard | grep -v 'ralph-log.txt' || true)
+              # Check for untracked files
+              UNTRACKED=$(git ls-files --others --exclude-standard || true)
               if [ -n "$UNTRACKED" ]; then
                 echo "ERROR: Untracked files detected!"
                 echo "Run the ralph-cleanup job to preserve changes before continuing."
@@ -232,6 +232,8 @@ spec:
           value: "test"
         - name: QUARKUS_DATASOURCE_PASSWORD
           value: "test"
+        - name: IS_KUBERNETES
+          value: "true"
 
         resources:
           {{- if .Values.job.resources }}
