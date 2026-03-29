@@ -59,6 +59,10 @@ WORKDIR /work
 # Switch to non-root user
 USER ubuntu
 
+# Install Bun as the ubuntu user
+RUN curl -fsSL https://bun.sh/install | bash
+ENV PATH="/home/ubuntu/.bun/bin:${PATH}"
+
 # Install Claude CLI as the ubuntu user
 RUN curl -fsSL https://claude.ai/install.sh | bash
 
@@ -69,6 +73,7 @@ ENV PATH="/home/ubuntu/.local/bin:${PATH}"
 RUN python3 --version && \
     node --version && \
     npm --version && \
+    bun --version && \
     java -version && \
     git --version && \
     claude --version
