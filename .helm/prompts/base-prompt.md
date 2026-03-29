@@ -88,15 +88,15 @@ Follow these rules **in order**, do not improvise.
 
 ## Git Workflow (NON-NEGOTIABLE)
 
-You are working on the `ralph-{{ .Values.job.aiProvider }}` branch.
+You are working on the `{{ .Values.job.branch }}` branch.
 
 ### Per-task sequence
 
-0. `git checkout ralph-{{ .Values.job.aiProvider }} && git pull origin ralph-{{ .Values.job.aiProvider }}`
+0. `git checkout {{ .Values.job.branch }} && git pull origin {{ .Values.job.branch }}`
 1. `git checkout -b <task.workBranch>`
 2. Implement task and commit incrementally
-3. `git checkout ralph-{{ .Values.job.aiProvider }} && git merge <task.workBranch>`
-4. `git push origin ralph-{{ .Values.job.aiProvider }}`
+3. `git checkout {{ .Values.job.branch }} && git merge <task.workBranch>`
+4. `git push origin {{ .Values.job.branch }}`
 
 A task is **NOT complete** unless step 4 has occurred.
 
@@ -118,25 +118,20 @@ Immediately after selecting a task:
 
 - Implement **only** the selected task
 - Follow the task steps exactly
-- Follow TDD: write failing test FIRST, then implementation (see CLAUDE.md)
+- Follow TDD where applicable: write failing test FIRST, then implementation (see CLAUDE.md)
 - Keep changes minimal and aligned with existing patterns
 - Add reusable findings to **Codebase Patterns** at the TOP of `prd/{{ .Values.job.prd }}-prd-progress.txt`
-- If you have attempted to fix test/build failures more than 3 times within this iteration, stop. Leave status as in_progress, write what you tried to the checkpoint      
+- If you have attempted to fix test/build failures more than 3 times within this iteration, stop. Leave status as in_progress, write what you tried to the checkpoint
   field, and end your itereation with the fail token.
+- If the PRD has a `constraints` block, read and obey it strictly. Files listed in `DO_NOT_MODIFY` are off-limits. A `NO_REFORMATTING` rule means do not run formatters or change quote styles in existing files.
+- Do not modify files that are not relevant to the task. If you read a file for reference, do not write changes back to it unless the task requires it.
 
 ---
 
-## Test Annotations                                                           
-- Use plain JUnit 5 (`@Test` only) for: DTOs, enums, domain entities, mappers, validators, and anything that doesn't require CDI injection or a running Quarkus instance.                                                                     
-- Use `@QuarkusTest` ONLY for: resource/endpoint tests, repository integration tests, and service tests that require injected dependencies.                       
-- Never annotate a test class with @QuarkusTest unless it uses @Inject or needs the Quarkus application context.
-
 ## Quality Checks (REQUIRED)
 
-Before marking a task complete, run the checks from CLAUDE.md "Commands":
-
-- `./gradlew test` – all tests pass
-- `./gradlew ktlintCheck` – no lint errors
+Before marking a task complete, run the build/test checks described in CLAUDE.md "Commands" section (if they exist).
+If CLAUDE.md does not specify commands, at minimum verify the project builds without errors.
 
 Fix all failures before proceeding. Do NOT mark complete if checks fail.
 
@@ -156,7 +151,7 @@ When the task is fully complete:
 
 3. Commit: `feat: <TASK_ID> - <Task Title>`
 
-4. Push: `git push origin ralph-{{ .Values.job.aiProvider }}`
+4. Push: `git push origin {{ .Values.job.branch }}`
 
 ---
 
@@ -167,9 +162,9 @@ After completing a task **and pushing**, your response MUST include:
 ```
 FINALIZATION EVIDENCE
 
-* git checkout ralph-{{ .Values.job.aiProvider }}
+* git checkout {{ .Values.job.branch }}
 * git commit -m "feat: <TASK_ID> - <Task Title>"
-* git push origin ralph-{{ .Values.job.aiProvider }}
+* git push origin {{ .Values.job.branch }}
 ```
 
 If this section is missing, the task is not considered complete.
