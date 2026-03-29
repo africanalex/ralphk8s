@@ -21,6 +21,7 @@ RUN set -eux; \
         openssh-client \
         jq \
         build-essential \
+        unzip \
         vim \
         bash \
         grep \
